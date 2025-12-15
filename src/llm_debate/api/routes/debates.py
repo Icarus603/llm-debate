@@ -8,12 +8,13 @@ import uuid
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
 from llm_debate.api.deps import get_db, get_sessionmaker
 from llm_debate.api.schemas import (
     DebateCreate,
+    DebateListItem,
     DebateOut,
     DebateWithTurns,
     StartResumeResponse,
@@ -22,6 +23,7 @@ from llm_debate.api.schemas import (
 from llm_debate.core.settings import load_settings
 from llm_debate.core.time import utcnow
 from llm_debate.db.models import Debate, Turn
+from llm_debate.runtime.cursor import completed_rounds_from_cursor
 from llm_debate.worker.tasks import advance_debate
 
 router = APIRouter()
@@ -52,6 +54,32 @@ def _turn_out(turn: Turn) -> TurnOut:
     )
 
 
+@router.get("", response_model=list[DebateListItem])
+def list_debates(
+    limit: int = Query(default=50, ge=1, le=200),
+    db: Session = Depends(get_db),
+) -> list[DebateListItem]:
+    debates = list(db.execute(select(Debate).order_by(Debate.updated_at.desc()).limit(limit)).scalars())
+    items: list[DebateListItem] = []
+    for d in debates:
+        completed_rounds = completed_rounds_from_cursor(next_round=int(d.next_round))
+        items.append(
+            DebateListItem(
+                id=d.id,
+                topic=d.topic,
+                status=d.status,
+                next_round=int(d.next_round),
+                next_actor=d.next_actor,
+                stop_reason=d.stop_reason,
+                last_error=d.last_error,
+                completed_rounds=completed_rounds,
+                created_at=d.created_at,
+                updated_at=d.updated_at,
+            )
+        )
+    return items
+
+
 @router.post("", response_model=DebateOut, status_code=status.HTTP_201_CREATED)
 def create_debate(payload: DebateCreate, db: Session = Depends(get_db)) -> DebateOut:
     merged_settings = {**_default_settings(), **payload.settings}
@@ -60,6 +88,8 @@ def create_debate(payload: DebateCreate, db: Session = Depends(get_db)) -> Debat
         topic=payload.topic,
         status="created",
         settings=merged_settings,
+        next_round=1,
+        next_actor="debater_a",
         created_at=now,
         updated_at=now,
     )
@@ -75,7 +105,9 @@ def get_debate(debate_id: uuid.UUID, db: Session = Depends(get_db)) -> DebateWit
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Debate not found")
 
     turns = list(
-        db.execute(select(Turn).where(Turn.debate_id == debate_id).order_by(Turn.created_at)).scalars()
+        db.execute(
+            select(Turn).where(Turn.debate_id == debate_id).order_by(Turn.created_at, Turn.id)
+        ).scalars()
     )
     return DebateWithTurns(
         debate=DebateOut.model_validate(debate, from_attributes=True),
@@ -155,6 +187,7 @@ def stream_debate_events(
 
     def iter_events() -> Iterator[bytes]:
         last_seen_created_at = None
+        last_seen_turn_id: uuid.UUID | None = None
         with sessionmaker() as db:
             debate = db.get(Debate, debate_id)
             if debate is None:
@@ -169,16 +202,30 @@ def stream_debate_events(
                     turn = None
                 if turn is not None and turn.debate_id == debate_id:
                     last_seen_created_at = turn.created_at
+                    last_seen_turn_id = turn.id
 
         while True:
             with sessionmaker() as db:
-                query = select(Turn).where(Turn.debate_id == debate_id).order_by(Turn.created_at)
-                if last_seen_created_at is not None:
-                    query = query.where(Turn.created_at > last_seen_created_at)
+                query = (
+                    select(Turn)
+                    .where(Turn.debate_id == debate_id)
+                    .order_by(Turn.created_at, Turn.id)
+                )
+                if last_seen_created_at is not None and last_seen_turn_id is not None:
+                    query = query.where(
+                        or_(
+                            Turn.created_at > last_seen_created_at,
+                            and_(
+                                Turn.created_at == last_seen_created_at,
+                                Turn.id > last_seen_turn_id,
+                            ),
+                        )
+                    )
                 new_turns = list(db.execute(query).scalars())
 
                 for t in new_turns:
                     last_seen_created_at = t.created_at
+                    last_seen_turn_id = t.id
                     turn_payload = _turn_out(t).model_dump(mode="json")
                     yield _sse_format("turn", turn_payload, str(t.id)).encode("utf-8")
 

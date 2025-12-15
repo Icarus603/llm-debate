@@ -17,6 +17,23 @@ class DebateOut(BaseModel):
     topic: str
     status: str
     settings: dict[str, Any]
+    next_round: int
+    next_actor: str
+    stop_reason: str | None = None
+    last_error: str | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class DebateListItem(BaseModel):
+    id: uuid.UUID
+    topic: str
+    status: str
+    next_round: int
+    next_actor: str
+    stop_reason: str | None = None
+    last_error: str | None = None
+    completed_rounds: int
     created_at: datetime
     updated_at: datetime
 
@@ -40,4 +57,3 @@ class DebateWithTurns(BaseModel):
 
 class StartResumeResponse(BaseModel):
     enqueued: bool
-

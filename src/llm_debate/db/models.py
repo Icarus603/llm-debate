@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 import uuid
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, Text
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -18,6 +18,10 @@ class Debate(Base):
     topic: Mapped[str] = mapped_column(Text(), nullable=False)
     status: Mapped[str] = mapped_column(Text(), nullable=False)
     settings: Mapped[dict[str, Any]] = mapped_column(JSONB(), nullable=False)
+    next_round: Mapped[int] = mapped_column(Integer(), nullable=False, default=1)
+    next_actor: Mapped[str] = mapped_column(Text(), nullable=False, default="debater_a")
+    stop_reason: Mapped[str | None] = mapped_column(Text(), nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text(), nullable=True)
     created_at: Mapped[Any] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
     updated_at: Mapped[Any] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
 
@@ -51,4 +55,5 @@ class Turn(Base):
     __table_args__ = (
         Index("ix_turns_debate_id_created_at", "debate_id", "created_at"),
         Index("ix_turns_debate_id_round_actor", "debate_id", "round", "actor"),
+        UniqueConstraint("debate_id", "round", "actor", name="uq_turns_debate_id_round_actor"),
     )

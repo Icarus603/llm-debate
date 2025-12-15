@@ -9,6 +9,8 @@ type Turn = {
   actor: string;
   content: string;
   model: string | null;
+  usage: Record<string, unknown>;
+  metadata: Record<string, unknown>;
   created_at: string;
 };
 
@@ -16,6 +18,24 @@ type Debate = {
   id: string;
   topic: string;
   status: string;
+  next_round: number;
+  next_actor: string;
+  stop_reason?: string | null;
+  last_error?: string | null;
+  settings: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+type DebateListItem = {
+  id: string;
+  topic: string;
+  status: string;
+  next_round: number;
+  next_actor: string;
+  stop_reason?: string | null;
+  last_error?: string | null;
+  completed_rounds: number;
   created_at: string;
   updated_at: string;
 };
@@ -36,10 +56,19 @@ function labelForActor(actor: string): string {
 export default function HomePage() {
   const apiBaseUrl = useMemo(getApiBaseUrl, []);
   const [topic, setTopic] = useState("");
+  const [debates, setDebates] = useState<DebateListItem[]>([]);
   const [debate, setDebate] = useState<Debate | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [error, setError] = useState<string | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
+  const lastSeenTurnIdRef = useRef<string | null>(null);
+
+  async function refreshDebatesList(): Promise<void> {
+    const res = await fetch(`${apiBaseUrl}/debates?limit=50`);
+    if (!res.ok) return;
+    const items: DebateListItem[] = await res.json();
+    setDebates(items);
+  }
 
   async function createDebate(): Promise<void> {
     setError(null);
@@ -55,6 +84,8 @@ export default function HomePage() {
     const created: Debate = await res.json();
     setDebate(created);
     setTurns([]);
+    lastSeenTurnIdRef.current = null;
+    await refreshDebatesList();
   }
 
   async function refreshDebate(debateId: string): Promise<void> {
@@ -63,25 +94,33 @@ export default function HomePage() {
     const data = await res.json();
     setDebate(data.debate);
     setTurns(data.turns);
+    lastSeenTurnIdRef.current = data.turns.length ? data.turns[data.turns.length - 1].id : null;
   }
 
   async function start(): Promise<void> {
     if (!debate) return;
     await fetch(`${apiBaseUrl}/debates/${debate.id}/start`, { method: "POST" });
     await refreshDebate(debate.id);
+    await refreshDebatesList();
   }
 
   async function resume(): Promise<void> {
     if (!debate) return;
     await fetch(`${apiBaseUrl}/debates/${debate.id}/resume`, { method: "POST" });
     await refreshDebate(debate.id);
+    await refreshDebatesList();
   }
 
   async function stop(): Promise<void> {
     if (!debate) return;
     await fetch(`${apiBaseUrl}/debates/${debate.id}/stop`, { method: "POST" });
     await refreshDebate(debate.id);
+    await refreshDebatesList();
   }
+
+  useEffect(() => {
+    refreshDebatesList().catch(() => {});
+  }, [apiBaseUrl]);
 
   useEffect(() => {
     if (!debate) return;
@@ -89,14 +128,23 @@ export default function HomePage() {
     refreshDebate(debate.id).catch(() => {});
 
     eventSourceRef.current?.close();
-    const es = new EventSource(`${apiBaseUrl}/debates/${debate.id}/events`);
+    const after = lastSeenTurnIdRef.current;
+    const url = after
+      ? `${apiBaseUrl}/debates/${debate.id}/events?after=${encodeURIComponent(after)}`
+      : `${apiBaseUrl}/debates/${debate.id}/events`;
+    const es = new EventSource(url);
     eventSourceRef.current = es;
 
     es.addEventListener("turn", (evt) => {
       const data = JSON.parse((evt as MessageEvent).data) as Turn;
       setTurns((current) => {
         if (current.some((t) => t.id === data.id)) return current;
-        return [...current, data].sort((a, b) => a.created_at.localeCompare(b.created_at));
+        lastSeenTurnIdRef.current = data.id;
+        return [...current, data].sort((a, b) => {
+          const c = a.created_at.localeCompare(b.created_at);
+          if (c !== 0) return c;
+          return a.id.localeCompare(b.id);
+        });
       });
     });
 
@@ -142,7 +190,7 @@ export default function HomePage() {
                 <div className="muted">Debate</div>
                 <div style={{ fontWeight: 600 }}>{debate.topic}</div>
                 <div className="muted" style={{ fontSize: 12 }}>
-                  {debate.id} · status={debate.status}
+                  {debate.id} · status={debate.status} · next={debate.next_actor}@{debate.next_round}
                 </div>
               </div>
               <div className="row">
@@ -159,6 +207,41 @@ export default function HomePage() {
             </div>
           </div>
         ) : null}
+
+        <div className="card" style={{ marginTop: 16 }}>
+          <div className="row" style={{ justifyContent: "space-between", alignItems: "baseline" }}>
+            <h2 style={{ margin: 0, fontSize: 16 }}>Debates</h2>
+            <button className="button" onClick={refreshDebatesList}>
+              Refresh
+            </button>
+          </div>
+
+          {debates.length === 0 ? (
+            <p className="muted">No debates yet.</p>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
+              {debates.map((d) => (
+                <button
+                  key={d.id}
+                  className="button"
+                  style={{
+                    justifyContent: "space-between",
+                    textAlign: "left",
+                    borderColor: debate?.id === d.id ? "var(--fg)" : undefined,
+                  }}
+                  onClick={() => refreshDebate(d.id)}
+                >
+                  <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {d.topic}
+                  </span>
+                  <span className="muted" style={{ marginLeft: 12, fontSize: 12 }}>
+                    {d.status} · rounds={d.completed_rounds}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="card" style={{ flex: 3, minWidth: 320 }}>
@@ -181,4 +264,3 @@ export default function HomePage() {
     </div>
   );
 }
-
