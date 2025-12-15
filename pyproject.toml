@@ -1,0 +1,53 @@
+[project]
+name = "llm-debate"
+version = "0.1.0"
+description = "Two-LLM debate with judge (FastAPI + Celery) using DeepSeek."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "alembic>=1.13.0",
+  "celery>=5.4.0",
+  "fastapi>=0.115.0",
+  "httpx>=0.27.0",
+  "openai>=1.40.0",
+  "python-dotenv>=1.0.1",
+  "psycopg[binary]>=3.2.0",
+  "pydantic-settings>=2.4.0",
+  "sqlalchemy>=2.0.30",
+  "tenacity>=9.0.0",
+  "uvicorn[standard]>=0.30.0",
+]
+
+[dependency-groups]
+dev = [
+  "mypy>=1.11.0",
+  "pytest>=8.3.0",
+  "ruff>=0.6.0",
+  "types-redis>=4.6.0.20241004",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "N", "RUF"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+force-sort-within-sections = true
+
+[tool.ruff.lint.per-file-ignores]
+"src/llm_debate/api/routes/*.py" = ["B008"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/llm_debate"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

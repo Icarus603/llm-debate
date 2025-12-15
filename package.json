@@ -1,0 +1,11 @@
+{
+  "name": "llm-debate",
+  "private": true,
+  "packageManager": "pnpm@9.0.0",
+  "scripts": {
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "format": "pnpm -r format"
+  }
+}
+
