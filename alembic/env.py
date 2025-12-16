@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from logging.config import fileConfig
+import os
 
 from sqlalchemy import engine_from_config, pool
 
@@ -17,6 +18,9 @@ target_metadata = Base.metadata
 
 
 def _get_url() -> str:
+    env_url = os.environ.get("DATABASE_URL")
+    if env_url:
+        return env_url
     settings: Settings = load_settings()
     return str(settings.database_url)
 
@@ -55,4 +59,3 @@ if context.is_offline_mode():
     run_migrations_offline()
 else:
     run_migrations_online()
-
