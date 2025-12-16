@@ -29,7 +29,7 @@ docker compose down
 
 ### 1) Start infrastructure
 ```bash
-docker compose up -d
+docker compose -f docker-compose.yml -f docker-compose.host.yml up -d postgres redis
 ```
 
 ### 2) Configure env
