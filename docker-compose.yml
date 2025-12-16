@@ -17,14 +17,84 @@ services:
 
   redis:
     image: redis:7
-    ports:
-      - "6379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 2s
       timeout: 5s
       retries: 15
 
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/llm_debate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/llm_debate
+      REDIS_URL: redis://redis:6379/0
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      DEEPSEEK_MODEL_DEBATER: ${DEEPSEEK_MODEL_DEBATER:-deepseek-chat}
+      DEEPSEEK_MODEL_JUDGE: ${DEEPSEEK_MODEL_JUDGE:-deepseek-chat}
+      DEBATE_MAX_ROUNDS: ${DEBATE_MAX_ROUNDS:-5}
+      DEBATE_MAX_RUNTIME_SECONDS: ${DEBATE_MAX_RUNTIME_SECONDS:-600}
+      DEBATE_MAX_TOTAL_OUTPUT_TOKENS: ${DEBATE_MAX_TOTAL_OUTPUT_TOKENS:-8000}
+      DEBATE_MAX_TOKENS_DEBATER: ${DEBATE_MAX_TOKENS_DEBATER:-600}
+      DEBATE_MAX_TOKENS_JUDGE: ${DEBATE_MAX_TOKENS_JUDGE:-400}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    command: ["uvicorn", "llm_debate.api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.python
+    environment:
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@postgres:5432/llm_debate
+      REDIS_URL: redis://redis:6379/0
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      DEEPSEEK_BASE_URL: ${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      DEEPSEEK_MODEL_DEBATER: ${DEEPSEEK_MODEL_DEBATER:-deepseek-chat}
+      DEEPSEEK_MODEL_JUDGE: ${DEEPSEEK_MODEL_JUDGE:-deepseek-chat}
+      DEBATE_MAX_ROUNDS: ${DEBATE_MAX_ROUNDS:-5}
+      DEBATE_MAX_RUNTIME_SECONDS: ${DEBATE_MAX_RUNTIME_SECONDS:-600}
+      DEBATE_MAX_TOTAL_OUTPUT_TOKENS: ${DEBATE_MAX_TOTAL_OUTPUT_TOKENS:-8000}
+      DEBATE_MAX_TOKENS_DEBATER: ${DEBATE_MAX_TOKENS_DEBATER:-600}
+      DEBATE_MAX_TOKENS_JUDGE: ${DEBATE_MAX_TOKENS_JUDGE:-400}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    command: ["celery", "-A", "llm_debate.worker.celery_app", "worker", "-l", "info"]
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8000}
+      NEXT_TELEMETRY_DISABLED: "1"
+    depends_on:
+      - api
+    ports:
+      - "3000:3000"
+    command: ["pnpm", "-C", "apps/web", "dev", "--hostname", "0.0.0.0", "--port", "3000"]
+
 volumes:
   postgres_data:
-

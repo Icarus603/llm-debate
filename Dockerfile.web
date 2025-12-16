@@ -1,0 +1,15 @@
+FROM node:20-bookworm-slim
+
+WORKDIR /app
+
+RUN corepack enable
+
+COPY package.json pnpm-workspace.yaml ./
+COPY apps/web/package.json apps/web/package.json
+
+RUN pnpm install --filter @llm-debate/web...
+
+COPY apps/web apps/web
+
+ENV NEXT_TELEMETRY_DISABLED=1
+

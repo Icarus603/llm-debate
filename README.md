@@ -10,6 +10,23 @@ Two debaters and a judge debate a topic. The debate runs in the background (Cele
 
 ## Local development
 
+### Option A: Docker (recommended)
+This runs Postgres, Redis, API, worker, and web UI in Docker. You do not need Redis installed locally.
+
+```bash
+export DEEPSEEK_API_KEY=your_key
+docker compose up -d --build
+```
+
+Open `http://localhost:3000`.
+
+Stop everything:
+```bash
+docker compose down
+```
+
+### Option B: Host-run apps + Docker infra
+
 ### 1) Start infrastructure
 ```bash
 docker compose up -d
