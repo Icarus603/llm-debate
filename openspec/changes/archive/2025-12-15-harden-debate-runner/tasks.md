@@ -21,4 +21,4 @@
 ## 5. Validation
 - [x] 5.1 Add unit tests for cursor advancement and idempotency (duplicate deliveries do not create extra turns).
 - [x] 5.2 Run `uv run ruff check .`, `uv run mypy .`, `uv run pytest -q`.
-- [ ] 5.3 Run a local manual smoke: create → start → refresh mid-run → stop → resume (confirm transcript continuity). (Requires running API/worker/web and a valid `DEEPSEEK_API_KEY`.)
+- [x] 5.3 Run a local manual smoke: create → start → refresh mid-run → stop → resume (confirm transcript continuity). (Requires running API/worker/web and a valid `DEEPSEEK_API_KEY`.)
