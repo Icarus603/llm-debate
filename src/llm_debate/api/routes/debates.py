@@ -32,6 +32,8 @@ router = APIRouter()
 def _default_settings() -> dict[str, Any]:
     settings = load_settings()
     return {
+        "debater_a_side": "pro",
+        "judge_mode": "end",
         "max_rounds": settings.debate_max_rounds,
         "max_runtime_seconds": settings.debate_max_runtime_seconds,
         "max_total_output_tokens": settings.debate_max_total_output_tokens,
@@ -82,7 +84,7 @@ def list_debates(
 
 @router.post("", response_model=DebateOut, status_code=status.HTTP_201_CREATED)
 def create_debate(payload: DebateCreate, db: Session = Depends(get_db)) -> DebateOut:
-    merged_settings = {**_default_settings(), **payload.settings}
+    merged_settings = {**_default_settings(), **payload.settings.model_dump(exclude_none=True)}
     now = utcnow()
     debate = Debate(
         topic=payload.topic,

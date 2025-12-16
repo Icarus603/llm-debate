@@ -16,6 +16,7 @@ dependencies = [
   "sqlalchemy>=2.0.30",
   "tenacity>=9.0.0",
   "uvicorn[standard]>=0.30.0",
+  "redis>=5.0.0",
 ]
 
 [dependency-groups]

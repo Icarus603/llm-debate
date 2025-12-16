@@ -28,7 +28,7 @@ def _read_sse_events(url: str, *, max_turns: int, timeout_seconds: float) -> lis
     turns: list[Turn] = []
     started = time.time()
 
-    with httpx.stream("GET", url, timeout=timeout_seconds) as r:
+    with httpx.stream("GET", url, timeout=timeout_seconds, trust_env=False) as r:
         r.raise_for_status()
         event: dict[str, str] = {}
         for line in r.iter_lines():
@@ -67,7 +67,7 @@ def main() -> int:
 
     api = _api_base_url()
 
-    with httpx.Client(timeout=args.timeout_seconds) as client:
+    with httpx.Client(timeout=args.timeout_seconds, trust_env=False) as client:
         create = client.post(f"{api}/debates", json={"topic": args.topic})
         create.raise_for_status()
         debate = create.json()
@@ -97,4 +97,3 @@ if __name__ == "__main__":
     except Exception as exc:
         print(f"smoke_e2e failed: {exc}", file=sys.stderr)
         raise
-

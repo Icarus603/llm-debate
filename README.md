@@ -1,6 +1,6 @@
 # llm-debate
 
-Two debaters and a judge debate a topic. The debate runs in the background (Celery), persists every step to Postgres, and streams updates to the UI via SSE.
+Two debaters debate a topic round-by-round and a judge produces a final verdict. The debate runs in the background (Celery), persists every step to Postgres, and streams updates to the UI via SSE.
 
 ## Repo layout
 - `apps/web`: Next.js UI (pnpm)
@@ -19,6 +19,8 @@ docker compose up -d --build
 ```
 
 Open `http://localhost:3000`.
+
+Create a debate on `/`, then open the deep-linkable detail page at `/debates/<id>`.
 
 Stop everything:
 ```bash
@@ -74,3 +76,10 @@ Requires API + worker running:
 ```bash
 uv run python scripts/smoke_e2e.py
 ```
+
+## Advanced configuration (API-only)
+Per-debate model overrides can be set on `POST /debates` via `settings.model_debater` and `settings.model_judge`.
+
+## Troubleshooting
+- Port conflicts: only the web (`3000`) and api (`8000`) ports are published by default; if you changed compose overrides, ensure nothing else is using those ports.
+- Reset local state (destructive): `docker compose down -v` removes the Postgres volume and clears all debates.

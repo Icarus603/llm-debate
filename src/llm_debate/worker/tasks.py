@@ -14,9 +14,9 @@ from llm_debate.db.models import Debate, Turn
 from llm_debate.db.turn_writes import build_insert_turn_idempotent_stmt
 from llm_debate.llm.deepseek import DeepSeekClient, safe_parse_json_object
 from llm_debate.runtime.cursor import cursor_after_step, cursor_from_last_turn
-from llm_debate.runtime.prompts import format_transcript, system_prompt, user_prompt
+from llm_debate.runtime.model_select import select_model_for_actor
+from llm_debate.runtime.prompts import Side, format_transcript, system_prompt, user_prompt
 from llm_debate.runtime.steps import (
-    judge_no_new_streak,
     should_stop_for_rounds,
     should_stop_for_runtime,
     should_stop_for_token_budget,
@@ -29,16 +29,6 @@ _SESSIONMAKER = create_sessionmaker(_ENGINE)
 _CLIENT = DeepSeekClient()
 
 Actor = Literal["debater_a", "debater_b", "judge"]
-StopReason = Literal[
-    "manual_stop",
-    "max_rounds",
-    "max_runtime_seconds",
-    "max_total_output_tokens",
-    "judge_early_stop",
-    "error",
-]
-
-
 class JudgeVerdict(BaseModel):
     summary: str = Field(min_length=1)
     score_a: int = Field(ge=0, le=10)
@@ -62,12 +52,6 @@ def _ensure_uuid(text: str) -> uuid.UUID:
 def _lock_debate(db: Session, debate_id: uuid.UUID) -> Debate | None:
     stmt = select(Debate).where(Debate.id == debate_id).with_for_update(skip_locked=True)
     return db.execute(stmt).scalar_one_or_none()
-
-
-def _set_completed(*, debate: Debate, now: Any, reason: StopReason) -> None:
-    debate.status = "completed"
-    debate.stop_reason = reason
-    debate.updated_at = now
 
 
 def _set_stopped(*, debate: Debate, now: Any) -> None:
@@ -115,39 +99,52 @@ def advance_debate(self: Any, debate_id: str) -> None:
                 debate.next_round = next_round
                 debate.next_actor = next_actor
 
-            completed_rounds = int(debate.next_round) - 1
-            if should_stop_for_rounds(settings=debate.settings, completed_rounds=completed_rounds):
-                _set_completed(debate=debate, now=now, reason="max_rounds")
-                db.add(debate)
-                return
-
-            if should_stop_for_runtime(settings=debate.settings, created_at=debate.created_at):
-                _set_completed(debate=debate, now=now, reason="max_runtime_seconds")
-                db.add(debate)
-                return
-
-            total_tokens = sum_completion_tokens([t.usage for t in turns])
-            if should_stop_for_token_budget(
-                settings=debate.settings, total_completion_tokens=total_tokens
+            judge_round = max(1, int(debate.next_round) - 1)
+            if (
+                debate.next_actor == "judge"
+                and debate.stop_reason is not None
+                and db.execute(
+                    select(Turn.id).where(
+                        Turn.debate_id == debate_uuid,
+                        Turn.round == judge_round,
+                        Turn.actor == "judge",
+                    )
+                ).scalar_one_or_none()
+                is not None
             ):
-                _set_completed(debate=debate, now=now, reason="max_total_output_tokens")
+                debate.status = "completed"
+                debate.updated_at = now
                 db.add(debate)
                 return
 
-            judge_meta = [t.meta for t in turns if t.actor == "judge"]
-            if judge_no_new_streak(judge_meta) >= 2:
-                _set_completed(debate=debate, now=now, reason="judge_early_stop")
-                db.add(debate)
-                return
+            if debate.next_actor != "judge":
+                completed_rounds = int(debate.next_round) - 1
+                if should_stop_for_rounds(settings=debate.settings, completed_rounds=completed_rounds):
+                    debate.stop_reason = "max_rounds"
+                    debate.next_actor = "judge"
+                elif should_stop_for_runtime(settings=debate.settings, created_at=debate.created_at):
+                    debate.stop_reason = "max_runtime_seconds"
+                    debate.next_actor = "judge"
+                else:
+                    total_tokens = sum_completion_tokens([t.usage for t in turns])
+                    if should_stop_for_token_budget(
+                        settings=debate.settings, total_completion_tokens=total_tokens
+                    ):
+                        debate.stop_reason = "max_total_output_tokens"
+                        debate.next_actor = "judge"
+                if debate.next_actor == "judge":
+                    debate.updated_at = now
 
             actor: Actor = debate.next_actor  # type: ignore[assignment]
-            step_round = int(debate.next_round)
+            step_round = judge_round if actor == "judge" else int(debate.next_round)
             topic = debate.topic
             debate_settings = dict(debate.settings)
             db.add(debate)
 
         transcript = format_transcript(turn_tuples)
-        model = settings.deepseek_model_judge if actor == "judge" else settings.deepseek_model_debater
+        raw_side = str(debate_settings.get("debater_a_side") or "pro").strip().lower()
+        debater_a_side: Side = "con" if raw_side == "con" else "pro"
+        model = select_model_for_actor(actor=actor, debate_settings=debate_settings, defaults=settings)
         max_tokens_key = "max_tokens_judge" if actor == "judge" else "max_tokens_debater"
         default_max = (
             settings.debate_max_tokens_judge if actor == "judge" else settings.debate_max_tokens_debater
@@ -155,8 +152,13 @@ def advance_debate(self: Any, debate_id: str) -> None:
         max_tokens = int(debate_settings.get(max_tokens_key) or default_max)
 
         messages: list[dict[str, Any]] = [
-            {"role": "system", "content": system_prompt(actor)},
-            {"role": "user", "content": user_prompt(topic, transcript, actor, step_round)},
+            {"role": "system", "content": system_prompt(actor, debater_a_side=debater_a_side)},
+            {
+                "role": "user",
+                "content": user_prompt(
+                    topic, transcript, actor, step_round, debater_a_side=debater_a_side
+                ),
+            },
         ]
 
         response_format: dict[str, Any] | None = None
@@ -200,9 +202,15 @@ def advance_debate(self: Any, debate_id: str) -> None:
             if debate.status != "running":
                 return
 
-            if int(debate.next_round) != step_round or debate.next_actor != actor:
-                should_enqueue = True
-                return
+            if actor == "judge":
+                expected_judge_round = max(1, int(debate.next_round) - 1)
+                if debate.next_actor != "judge" or step_round != expected_judge_round:
+                    should_enqueue = True
+                    return
+            else:
+                if int(debate.next_round) != step_round or debate.next_actor != actor:
+                    should_enqueue = True
+                    return
 
             stmt = (
                 build_insert_turn_idempotent_stmt(
@@ -246,6 +254,10 @@ def advance_debate(self: Any, debate_id: str) -> None:
 
             debate.last_error = None
             debate.updated_at = now
+            if actor == "judge":
+                debate.status = "completed"
+                if debate.stop_reason is None:
+                    debate.stop_reason = "max_rounds"
             db.add(debate)
             should_enqueue = debate.status == "running"
 

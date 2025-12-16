@@ -26,8 +26,8 @@ def test_compute_next_step_debater_a_to_b() -> None:
 
 def test_compute_next_step_debater_b_to_judge() -> None:
     step = compute_next_step([(1, "debater_a"), (1, "debater_b")])
-    assert step.round == 1
-    assert step.actor == "judge"
+    assert step.round == 2
+    assert step.actor == "debater_a"
 
 
 def test_compute_next_step_judge_to_next_round() -> None:
@@ -59,4 +59,3 @@ def test_judge_no_new_streak() -> None:
         {"no_new_substantive_arguments": True},
     ]
     assert judge_no_new_streak(metas) == 2
-

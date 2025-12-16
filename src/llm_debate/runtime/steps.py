@@ -29,7 +29,8 @@ def compute_next_step(turns: list[tuple[int, str]]) -> NextStep:
     """
     Determine the next step from (round, actor) history.
 
-    Actors must be one of: debater_a, debater_b, judge.
+    Actors are typically debater_a and debater_b. A final judge step may be scheduled separately
+    based on stop conditions and is not inferred solely from turn history.
     """
 
     if not turns:
@@ -39,7 +40,7 @@ def compute_next_step(turns: list[tuple[int, str]]) -> NextStep:
     if last_actor == "debater_a":
         return NextStep(round=last_round, actor="debater_b")
     if last_actor == "debater_b":
-        return NextStep(round=last_round, actor="judge")
+        return NextStep(round=last_round + 1, actor="debater_a")
     return NextStep(round=last_round + 1, actor="debater_a")
 
 
@@ -81,4 +82,3 @@ def judge_no_new_streak(judge_turn_metadata: list[dict[str, Any]]) -> int:
         else:
             break
     return streak
-

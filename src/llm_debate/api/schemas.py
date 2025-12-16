@@ -1,15 +1,37 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 import uuid
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+DebaterSide = Literal["pro", "con"]
+JudgeMode = Literal["end"]
+
+
+class DebateSettingsIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    debater_a_side: DebaterSide | None = Field(
+        default=None, description='Debater A stance: "pro" or "con".'
+    )
+    max_rounds: int | None = Field(default=None, ge=1, le=100)
+    max_runtime_seconds: int | None = Field(default=None, ge=1, le=60 * 60)
+    max_total_output_tokens: int | None = Field(default=None, ge=1, le=200_000)
+    max_tokens_debater: int | None = Field(default=None, ge=1, le=20_000)
+    max_tokens_judge: int | None = Field(default=None, ge=1, le=20_000)
+    model_debater: str | None = Field(default=None, min_length=1)
+    model_judge: str | None = Field(default=None, min_length=1)
+    prompt_version: str | None = Field(default=None, min_length=1)
+    judge_mode: JudgeMode | None = Field(
+        default=None, description='Judge scheduling mode (default "end").'
+    )
 
 
 class DebateCreate(BaseModel):
     topic: str = Field(min_length=1)
-    settings: dict[str, Any] = Field(default_factory=dict)
+    settings: DebateSettingsIn = Field(default_factory=DebateSettingsIn)
 
 
 class DebateOut(BaseModel):

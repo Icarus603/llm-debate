@@ -12,7 +12,7 @@ def test_cursor_from_last_turn_debater_a() -> None:
 
 
 def test_cursor_from_last_turn_debater_b() -> None:
-    assert cursor_from_last_turn(last_round=2, last_actor="debater_b") == (2, "judge")
+    assert cursor_from_last_turn(last_round=2, last_actor="debater_b") == (3, "debater_a")
 
 
 def test_cursor_from_last_turn_judge() -> None:
@@ -25,11 +25,7 @@ def test_cursor_after_step() -> None:
         "debater_b",
     )
     assert cursor_after_step(next_round=1, next_actor="debater_b", persisted_actor="debater_b") == (
-        1,
-        "judge",
-    )
-    assert cursor_after_step(next_round=1, next_actor="judge", persisted_actor="judge") == (
         2,
         "debater_a",
     )
-
+    assert cursor_after_step(next_round=6, next_actor="judge", persisted_actor="judge") == (6, "debater_a")
