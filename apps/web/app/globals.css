@@ -4,7 +4,7 @@
 :root {
   color-scheme: light;
 
-  --background: #faf9f5;
+  --background: #ffffff;
   --foreground: #111827;
 
   --card: #ffffff;
@@ -22,15 +22,15 @@
   --muted: #faf9f5;
   --muted-foreground: #6b7280;
 
-  --accent: #237cc9;
-  --accent-foreground: #ffffff;
+  --accent: #faf9f5;
+  --accent-foreground: #111827;
 
   --destructive: #dc2626;
   --destructive-foreground: #ffffff;
 
   --border: #e7e5e0;
   --input: #e7e5e0;
-  --ring: #237cc9;
+  --ring: #e7e5e0;
 
   --radius: 12px;
 }
@@ -41,7 +41,16 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+    font-family: "Times New Roman", Times, serif, "Songti TC", "Songti SC",
+      "STSong", "PMingLiU", "MingLiU", "SimSun", "NSimSun", ui-serif, serif;
+  }
+  html[lang="zh-Hant"] body {
+    font-family: "Times New Roman", Times, serif, "Songti TC", "STSong",
+      "PMingLiU", "MingLiU", ui-serif, serif;
+  }
+  html[lang="zh-Hans"] body {
+    font-family: "Times New Roman", Times, serif, "Songti SC", "STSong",
+      "SimSun", "NSimSun", ui-serif, serif;
   }
   a {
     color: inherit;
@@ -72,4 +81,14 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+}
+
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }

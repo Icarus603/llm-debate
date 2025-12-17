@@ -47,12 +47,36 @@ export function getApiBaseUrl(): string {
   return url.replace(/\/$/, "");
 }
 
-export async function fetchJson<T>(input: RequestInfo | URL, init?: RequestInit): Promise<T> {
+export async function fetchJson<T>(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<T> {
   const res = await fetch(input, init);
   if (!res.ok) {
     const text = await res.text().catch(() => "");
-    throw new Error(`Request failed (${res.status}): ${text || res.statusText}`);
+    throw new Error(
+      `Request failed (${res.status}): ${text || res.statusText}`,
+    );
   }
   return (await res.json()) as T;
 }
 
+export async function fetchOk(
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<void> {
+  const res = await fetch(input, init);
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(
+      `Request failed (${res.status}): ${text || res.statusText}`,
+    );
+  }
+}
+
+export async function deleteDebate(
+  apiBaseUrl: string,
+  debateId: string,
+): Promise<void> {
+  await fetchOk(`${apiBaseUrl}/debates/${debateId}`, { method: "DELETE" });
+}

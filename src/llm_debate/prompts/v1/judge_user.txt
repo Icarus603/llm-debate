@@ -1,0 +1,18 @@
+Topic: {topic}
+
+Transcript so far:
+{transcript}
+
+Return a JSON object with keys:
+- summary: string
+- score_a: integer 0-10
+- score_b: integer 0-10
+- winner: one of a, b, tie
+- no_new_substantive_arguments: boolean
+
+Evaluate the full debate transcript and provide a final verdict.
+In summary: mention each side's strongest argument and the key deciding factor.
+Set no_new_substantive_arguments to true if the last 2 debater turns introduced no new substance.
+
+{language_rule}
+

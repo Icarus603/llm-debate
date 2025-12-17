@@ -1,0 +1,14 @@
+Topic: {topic}
+
+Transcript so far:
+{transcript}
+
+Round: {round_number}
+Your role: {actor}
+Your stance: {stance}
+
+Write your next turn now following your system instructions.
+Avoid repeating earlier points unless you add genuinely new substance.
+If the transcript does not include any turns from the other debater yet, treat this as an opening statement and do not reference their arguments.
+
+{language_rule}

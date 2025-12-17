@@ -24,6 +24,7 @@ from llm_debate.core.settings import load_settings
 from llm_debate.core.time import utcnow
 from llm_debate.db.models import Debate, Turn
 from llm_debate.runtime.cursor import completed_rounds_from_cursor
+from llm_debate.runtime.status import is_terminal
 from llm_debate.worker.tasks import advance_debate
 
 router = APIRouter()
@@ -33,6 +34,8 @@ def _default_settings() -> dict[str, Any]:
     settings = load_settings()
     return {
         "debater_a_side": "pro",
+        "output_language": "zh-Hant",
+        "prompt_version": "v1",
         "judge_mode": "end",
         "max_rounds": settings.debate_max_rounds,
         "max_runtime_seconds": settings.debate_max_runtime_seconds,
@@ -100,6 +103,16 @@ def create_debate(payload: DebateCreate, db: Session = Depends(get_db)) -> Debat
     return DebateOut.model_validate(debate, from_attributes=True)
 
 
+@router.delete("/{debate_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_debate(debate_id: uuid.UUID, db: Session = Depends(get_db)) -> Response:
+    debate = db.get(Debate, debate_id)
+    if debate is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Debate not found")
+
+    db.delete(debate)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.get("/{debate_id}", response_model=DebateWithTurns)
 def get_debate(debate_id: uuid.UUID, db: Session = Depends(get_db)) -> DebateWithTurns:
     debate = db.get(Debate, debate_id)
@@ -118,16 +131,24 @@ def get_debate(debate_id: uuid.UUID, db: Session = Depends(get_db)) -> DebateWit
 
 
 @router.post("/{debate_id}/start", response_model=StartResumeResponse)
-def start_debate(debate_id: uuid.UUID, db: Session = Depends(get_db)) -> StartResumeResponse:
+def start_debate(
+    debate_id: uuid.UUID,
+    x_ui_language: str | None = Header(default=None, alias="X-UI-Language"),
+    db: Session = Depends(get_db),
+) -> StartResumeResponse:
     debate = db.get(Debate, debate_id)
     if debate is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Debate not found")
 
-    if debate.status in {"running", "canceled"}:
+    if debate.status == "running" or is_terminal(debate.status):
         return StartResumeResponse(enqueued=False)
 
     debate.status = "running"
-    debate.settings = {**debate.settings, "started_at": utcnow().isoformat()}
+    next_settings = dict(debate.settings)
+    if x_ui_language in {"zh-Hant", "zh-Hans", "en"}:
+        next_settings["output_language"] = x_ui_language
+    next_settings["started_at"] = utcnow().isoformat()
+    debate.settings = next_settings
     debate.updated_at = utcnow()
     db.add(debate)
     db.flush()
@@ -136,17 +157,25 @@ def start_debate(debate_id: uuid.UUID, db: Session = Depends(get_db)) -> StartRe
 
 
 @router.post("/{debate_id}/resume", response_model=StartResumeResponse)
-def resume_debate(debate_id: uuid.UUID, db: Session = Depends(get_db)) -> StartResumeResponse:
+def resume_debate(
+    debate_id: uuid.UUID,
+    x_ui_language: str | None = Header(default=None, alias="X-UI-Language"),
+    db: Session = Depends(get_db),
+) -> StartResumeResponse:
     debate = db.get(Debate, debate_id)
     if debate is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Debate not found")
 
-    if debate.status in {"running", "canceled"}:
+    if debate.status == "running" or is_terminal(debate.status):
         return StartResumeResponse(enqueued=False)
 
     debate.status = "running"
-    if "started_at" not in debate.settings:
-        debate.settings = {**debate.settings, "started_at": utcnow().isoformat()}
+    next_settings = dict(debate.settings)
+    if x_ui_language in {"zh-Hant", "zh-Hans", "en"}:
+        next_settings["output_language"] = x_ui_language
+    if "started_at" not in next_settings:
+        next_settings["started_at"] = utcnow().isoformat()
+    debate.settings = next_settings
     debate.updated_at = utcnow()
     db.add(debate)
     db.flush()
@@ -186,7 +215,11 @@ def cancel_debate(debate_id: uuid.UUID, db: Session = Depends(get_db)) -> Respon
 
 
 @router.post("/{debate_id}/retry", response_model=StartResumeResponse)
-def retry_debate(debate_id: uuid.UUID, db: Session = Depends(get_db)) -> StartResumeResponse:
+def retry_debate(
+    debate_id: uuid.UUID,
+    x_ui_language: str | None = Header(default=None, alias="X-UI-Language"),
+    db: Session = Depends(get_db),
+) -> StartResumeResponse:
     debate = db.get(Debate, debate_id)
     if debate is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Debate not found")
@@ -197,8 +230,12 @@ def retry_debate(debate_id: uuid.UUID, db: Session = Depends(get_db)) -> StartRe
     debate.status = "running"
     debate.last_error = None
     debate.stop_reason = None
-    if "started_at" not in debate.settings:
-        debate.settings = {**debate.settings, "started_at": utcnow().isoformat()}
+    next_settings = dict(debate.settings)
+    if x_ui_language in {"zh-Hant", "zh-Hans", "en"}:
+        next_settings["output_language"] = x_ui_language
+    if "started_at" not in next_settings:
+        next_settings["started_at"] = utcnow().isoformat()
+    debate.settings = next_settings
     debate.updated_at = utcnow()
     db.add(debate)
     db.flush()

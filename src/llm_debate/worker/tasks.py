@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from typing import Any, Literal
 import uuid
 
@@ -15,7 +16,14 @@ from llm_debate.db.turn_writes import build_insert_turn_idempotent_stmt
 from llm_debate.llm.deepseek import DeepSeekClient, safe_parse_json_object
 from llm_debate.runtime.cursor import cursor_after_step, cursor_from_last_turn
 from llm_debate.runtime.model_select import select_model_for_actor
-from llm_debate.runtime.prompts import Side, format_transcript, system_prompt, user_prompt
+from llm_debate.runtime.prompts import (
+    OutputLanguage,
+    Side,
+    format_transcript,
+    system_prompt,
+    user_prompt,
+)
+from llm_debate.runtime.status import Actor, status_after_persisted_step
 from llm_debate.runtime.steps import (
     should_stop_for_rounds,
     should_stop_for_runtime,
@@ -28,7 +36,7 @@ _ENGINE = create_db_engine()
 _SESSIONMAKER = create_sessionmaker(_ENGINE)
 _CLIENT = DeepSeekClient()
 
-Actor = Literal["debater_a", "debater_b", "judge"]
+
 class JudgeVerdict(BaseModel):
     summary: str = Field(min_length=1)
     score_a: int = Field(ge=0, le=10)
@@ -37,7 +45,19 @@ class JudgeVerdict(BaseModel):
     no_new_substantive_arguments: bool
 
 
-def _render_judge_content(verdict: JudgeVerdict) -> str:
+def _render_judge_content(verdict: JudgeVerdict, *, language: OutputLanguage) -> str:
+    if language == "zh-Hans":
+        return (
+            f"胜者: {verdict.winner.upper()}\n"
+            f"分数: A={verdict.score_a}, B={verdict.score_b}\n\n"
+            f"{verdict.summary}"
+        ).strip()
+    if language == "zh-Hant":
+        return (
+            f"勝者: {verdict.winner.upper()}\n"
+            f"分數: A={verdict.score_a}, B={verdict.score_b}\n\n"
+            f"{verdict.summary}"
+        ).strip()
     return (
         f"Winner: {verdict.winner.upper()}\n"
         f"Scores: A={verdict.score_a}, B={verdict.score_b}\n\n"
@@ -147,6 +167,11 @@ def advance_debate(self: Any, debate_id: str) -> None:
         transcript = format_transcript(turn_tuples)
         raw_side = str(debate_settings.get("debater_a_side") or "pro").strip().lower()
         debater_a_side: Side = "con" if raw_side == "con" else "pro"
+        output_language_raw = str(debate_settings.get("output_language") or "").strip()
+        output_language: OutputLanguage = output_language_raw if output_language_raw else "zh-Hant"  # type: ignore[assignment]
+        if output_language not in {"zh-Hant", "zh-Hans", "en"}:
+            output_language = "zh-Hant"
+        prompt_version = str(debate_settings.get("prompt_version") or "v1").strip() or "v1"
         model = select_model_for_actor(actor=actor, debate_settings=debate_settings, defaults=settings)
         max_tokens_key = "max_tokens_judge" if actor == "judge" else "max_tokens_debater"
         default_max = (
@@ -155,11 +180,25 @@ def advance_debate(self: Any, debate_id: str) -> None:
         max_tokens = int(debate_settings.get(max_tokens_key) or default_max)
 
         messages: list[dict[str, Any]] = [
-            {"role": "system", "content": system_prompt(actor, debater_a_side=debater_a_side)},
+            {
+                "role": "system",
+                "content": system_prompt(
+                    actor,
+                    debater_a_side=debater_a_side,
+                    language=output_language,
+                    prompt_version=prompt_version,
+                ),
+            },
             {
                 "role": "user",
                 "content": user_prompt(
-                    topic, transcript, actor, step_round, debater_a_side=debater_a_side
+                    topic,
+                    transcript,
+                    actor,
+                    step_round,
+                    debater_a_side=debater_a_side,
+                    language=output_language,
+                    prompt_version=prompt_version,
                 ),
             },
         ]
@@ -168,13 +207,16 @@ def advance_debate(self: Any, debate_id: str) -> None:
         if actor == "judge":
             response_format = {"type": "json_object"}
 
+        started_at = time.perf_counter()
         result = _CLIENT.chat_completion(
             model=model, messages=messages, max_tokens=max_tokens, response_format=response_format
         )
+        duration_ms = round((time.perf_counter() - started_at) * 1000)
 
         now = utcnow()
         content = result.content.strip()
         turn_metadata = dict(result.metadata)
+        turn_metadata["duration_ms"] = duration_ms
 
         if actor == "judge":
             try:
@@ -189,7 +231,7 @@ def advance_debate(self: Any, debate_id: str) -> None:
                     no_new_substantive_arguments=False,
                 )
             turn_metadata.update(verdict.model_dump())
-            content = _render_judge_content(verdict)
+            content = _render_judge_content(verdict, language=output_language)
 
         should_enqueue = False
         with session_scope(_SESSIONMAKER) as db:
@@ -200,21 +242,25 @@ def advance_debate(self: Any, debate_id: str) -> None:
             if debate.status == "canceled":
                 return
 
-            if debate.status == "stopping":
-                _set_stopped(debate=debate, now=now)
-                db.add(debate)
-                return
-
-            if debate.status != "running":
+            stopping_requested = debate.status == "stopping"
+            if not stopping_requested and debate.status != "running":
                 return
 
             if actor == "judge":
                 expected_judge_round = max(1, int(debate.next_round) - 1)
                 if debate.next_actor != "judge" or step_round != expected_judge_round:
+                    if stopping_requested:
+                        _set_stopped(debate=debate, now=now)
+                        db.add(debate)
+                        return
                     should_enqueue = True
                     return
             else:
                 if int(debate.next_round) != step_round or debate.next_actor != actor:
+                    if stopping_requested:
+                        _set_stopped(debate=debate, now=now)
+                        db.add(debate)
+                        return
                     should_enqueue = True
                     return
 
@@ -258,12 +304,15 @@ def advance_debate(self: Any, debate_id: str) -> None:
                 debate.next_round = next_round
                 debate.next_actor = next_actor
 
+            new_status, new_stop_reason = status_after_persisted_step(
+                actor=actor,
+                stopping_requested=stopping_requested,
+                stop_reason=debate.stop_reason,
+            )
+            debate.status = new_status
+            debate.stop_reason = new_stop_reason
             debate.last_error = None
             debate.updated_at = now
-            if actor == "judge":
-                debate.status = "completed"
-                if debate.stop_reason is None:
-                    debate.stop_reason = "max_rounds"
             db.add(debate)
             should_enqueue = debate.status == "running"
 

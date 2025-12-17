@@ -37,16 +37,6 @@ The system SHALL render Judge turns with a structured verdict UI derived from pe
 - **WHEN** the UI renders the transcript
 - **THEN** the UI displays winner and scores (A/B) and a short summary for that Judge turn
 
-### Requirement: Status and error visibility while running
-The system SHALL surface debate status, stop reason, last error, and streaming connection status in the UI while a debate runs in the background.
-
-#### Scenario: User monitors a running debate
-- **GIVEN** a debate is running
-- **WHEN** the user views the debate detail page
-- **THEN** the UI shows current status and progress (round/actor cursor or completed rounds)
-- **AND THEN** the UI shows the SSE connection state (connected/reconnecting)
-- **AND THEN** if the debate fails, the UI shows the last error message and a retry action
-
 ### Requirement: Flat light design system
 The system SHALL present a flat, light UI theme suitable for long-form reading and live monitoring.
 
@@ -57,13 +47,13 @@ The system SHALL present a flat, light UI theme suitable for long-form reading a
 - **AND THEN** the UI uses flat 1px borders (no shadows/elevation)
 
 ### Requirement: Structured layout for monitoring
-The system SHALL provide a stable layout that separates navigation, transcript reading, and run controls.
+The system SHALL provide a stable layout that separates navigation and transcript reading while keeping run controls accessible.
 
 #### Scenario: User monitors a running debate
 - **GIVEN** a debate exists
 - **WHEN** the user views the debate detail page
-- **THEN** the UI provides distinct areas for: debate list/navigation, transcript, and controls/settings
-- **AND THEN** the transcript remains readable and scrollable independent of controls
+- **THEN** the UI provides distinct areas for: debate list/navigation and the debate detail view
+- **AND THEN** run controls are available without obstructing transcript reading
 
 ### Requirement: Advanced settings panel
 The system SHALL provide an “Advanced” UI panel for per-debate runtime settings without cluttering the primary controls.
@@ -72,4 +62,3 @@ The system SHALL provide an “Advanced” UI panel for per-debate runtime setti
 - **WHEN** the user opens the advanced panel
 - **THEN** the UI allows optional configuration of model overrides and stop/output limits
 - **AND THEN** the UI submits these settings during debate creation or update
-

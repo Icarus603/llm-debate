@@ -59,7 +59,8 @@ The system SHALL allow a user to stop (pause) an active debate run and later res
 
 #### Scenario: User stops a debate
 - **WHEN** the user requests “Stop”
-- **THEN** the worker completes the current in-progress step (if any)
+- **THEN** the system marks the debate as `stopping`
+- **AND THEN** the worker completes the current in-progress step (if any)
 - **AND THEN** the system stops enqueuing further debate steps
 - **AND THEN** the debate transitions to `stopped`
 
@@ -158,9 +159,24 @@ The system SHALL allow a user to cancel an in-progress or paused debate, transit
 ### Requirement: Retry failed debate execution
 The system SHALL allow retrying a failed debate run in a safe, idempotent way.
 
-#### Scenario: User retries a failed debate
-- **GIVEN** a debate is `failed`
+#### Scenario: Retry scope is next-step only
+- **GIVEN** a debate is `failed` with persisted turns
 - **WHEN** the user requests “Retry”
-- **THEN** the system reconciles the next-step cursor from persisted turns (if needed)
-- **AND THEN** the system re-enqueues the next step without duplicating previously persisted turns
+- **THEN** the system enqueues only the next step derived from the persisted cursor
+- **AND THEN** the system does not rewind or re-run previously persisted steps
+
+### Requirement: Explicit state categories
+The system SHALL treat debate statuses as either non-terminal or terminal to prevent unexpected restarts.
+
+#### Scenario: Terminal states block start/resume
+- **GIVEN** a debate is in a terminal state (`completed` or `canceled`)
+- **WHEN** the user requests “Start” or “Resume”
+- **THEN** the system does not enqueue additional steps
+
+### Requirement: Persisted step timing metadata
+The system SHALL persist per-step execution timing in turn metadata when a step completes.
+
+#### Scenario: Turn includes duration metadata
+- **WHEN** the system persists a completed turn
+- **THEN** the turn metadata includes `duration_ms` (or equivalent) for that step when available
 

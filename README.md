@@ -8,43 +8,61 @@ Two debaters debate a topic round-by-round and a judge produces a final verdict.
 - `apps/worker`: Celery worker (Python/uv)
 - `src/llm_debate`: shared backend code (API + worker)
 
-## Local development
+## Docker (recommended)
 
-### Option A: Docker (recommended)
-This runs Postgres, Redis, API, worker, and web UI in Docker. You do not need Redis installed locally.
-
+### 1) Configure env
 ```bash
-export DEEPSEEK_API_KEY=your_key
+cp .env.example .env
+```
+Set `DEEPSEEK_API_KEY` in `.env`.
+
+### 2) Build + run
+```bash
 docker compose up -d --build
 ```
 
-Open `http://localhost:3000`.
+Open:
+- Web UI: `http://localhost:3000`
+- API docs: `http://localhost:8000/docs`
 
-The Docker web container runs in production mode (`next build` + `next start`) for consistent behavior. For hot-reload UI development, use Option B.
-
-## UI tour (current MVP)
-- Left: debates list (search + status chips).
-- Center: transcript timeline (live-updating).
-- Right: controls (start/stop/resume/cancel/retry) and a pinned final verdict when present.
-
-Stop everything:
+Stop:
 ```bash
 docker compose down
 ```
 
-### Option B: Host-run apps + Docker infra
-
-### 1) Start infrastructure
+Reset Docker DB (destructive):
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.host.yml up -d postgres redis
+docker compose down -v
 ```
 
-### 2) Configure env
+Note: `docker-compose.yml` does not expose Postgres/Redis ports to the host (avoids port conflicts). If you need host access, use:
+```bash
+docker compose -f docker-compose.yml -f docker-compose.host.yml up -d --build
+```
+
+## Local development (no Docker)
+
+This repo can also run fully on your machine.
+
+### 1) Install + start Postgres + Redis (Homebrew)
+```bash
+brew install postgresql@17 redis
+brew services start postgresql@17
+brew services start redis
+```
+
+### 2) Create database (first time only)
+```bash
+createdb llm_debate
+```
+
+### 3) Configure env
 ```bash
 cp .env.example .env
 ```
+Set `DEEPSEEK_API_KEY` in `.env`.
 
-### 3) Python: install + migrate + run
+### 4) Python: install + migrate + run
 ```bash
 uv sync
 uv run alembic upgrade head
@@ -58,13 +76,18 @@ Reset dev DB (destructive):
 ./scripts/dev_reset_db.sh
 ```
 
-### 4) Web: install + run
+### 5) Web: install + run
 ```bash
 pnpm -C apps/web install
 pnpm -C apps/web dev
 ```
 
 Open `http://localhost:3000`.
+
+## UI tour (current MVP)
+- Left: debates list (search + status chips + delete).
+- Center: transcript timeline (live-updating).
+- Right: controls (start/stop/resume/cancel/retry).
 
 ## Quality gates
 ```bash
@@ -86,5 +109,4 @@ uv run python scripts/smoke_e2e.py
 Per-debate model overrides can be set on `POST /debates` via `settings.model_debater` and `settings.model_judge`.
 
 ## Troubleshooting
-- Port conflicts: only the web (`3000`) and api (`8000`) ports are published by default; if you use `docker-compose.host.yml`, Postgres (`5432`) and Redis (`6379`) are also published.
-- Reset local state (destructive): `docker compose down -v` removes the Postgres volume and clears all debates.
+If `curl http://localhost:8000/...` returns an empty reply, you may have a proxy configured for localhost. Use `--noproxy '*'` or set `NO_PROXY=localhost,127.0.0.1`.

@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 DebaterSide = Literal["pro", "con"]
 JudgeMode = Literal["end"]
+OutputLanguage = Literal["zh-Hant", "zh-Hans", "en"]
 
 
 class DebateSettingsIn(BaseModel):
@@ -16,6 +17,16 @@ class DebateSettingsIn(BaseModel):
     debater_a_side: DebaterSide | None = Field(
         default=None, description='Debater A stance: "pro" or "con".'
     )
+    output_language: OutputLanguage | None = Field(
+        default=None,
+        description='Language for LLM outputs: "zh-Hant", "zh-Hans", or "en".',
+    )
+    prompt_version: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=64,
+        description='Prompt template version (for example "v1").',
+    )
     max_rounds: int | None = Field(default=None, ge=1, le=100)
     max_runtime_seconds: int | None = Field(default=None, ge=1, le=60 * 60)
     max_total_output_tokens: int | None = Field(default=None, ge=1, le=200_000)
@@ -23,7 +34,6 @@ class DebateSettingsIn(BaseModel):
     max_tokens_judge: int | None = Field(default=None, ge=1, le=20_000)
     model_debater: str | None = Field(default=None, min_length=1)
     model_judge: str | None = Field(default=None, min_length=1)
-    prompt_version: str | None = Field(default=None, min_length=1)
     judge_mode: JudgeMode | None = Field(
         default=None, description='Judge scheduling mode (default "end").'
     )

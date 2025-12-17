@@ -4,9 +4,15 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
-import { DebatesSidebar } from "@/components/debates/DebatesSidebar";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -15,13 +21,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import type { Debate } from "@/lib/api";
 import { fetchJson, getApiBaseUrl } from "@/lib/api";
+import { useI18n } from "@/lib/i18n";
 
 export default function HomePage() {
   const apiBaseUrl = useMemo(getApiBaseUrl, []);
   const router = useRouter();
+  const { language, t } = useI18n();
   const [topic, setTopic] = useState("");
   const [stance, setStance] = useState<"pro" | "con">("pro");
   const [modelDebater, setModelDebater] = useState("");
@@ -32,18 +45,31 @@ export default function HomePage() {
   const [maxTokensDebater, setMaxTokensDebater] = useState<string>("");
   const [maxTokensJudge, setMaxTokensJudge] = useState<string>("");
 
+  function buildAdvancedSettings(): Record<string, unknown> {
+    const settings: Record<string, unknown> = {};
+    if (modelDebater.trim()) settings.model_debater = modelDebater.trim();
+    if (modelJudge.trim()) settings.model_judge = modelJudge.trim();
+    if (maxRounds.trim()) settings.max_rounds = Number(maxRounds);
+    if (maxRuntimeSeconds.trim())
+      settings.max_runtime_seconds = Number(maxRuntimeSeconds);
+    if (maxTotalOutputTokens.trim())
+      settings.max_total_output_tokens = Number(maxTotalOutputTokens);
+    if (maxTokensDebater.trim())
+      settings.max_tokens_debater = Number(maxTokensDebater);
+    if (maxTokensJudge.trim())
+      settings.max_tokens_judge = Number(maxTokensJudge);
+    return settings;
+  }
+
   async function createDebate(): Promise<void> {
     const trimmed = topic.trim();
     if (!trimmed) return;
 
-    const settings: Record<string, unknown> = { debater_a_side: stance };
-    if (modelDebater.trim()) settings.model_debater = modelDebater.trim();
-    if (modelJudge.trim()) settings.model_judge = modelJudge.trim();
-    if (maxRounds.trim()) settings.max_rounds = Number(maxRounds);
-    if (maxRuntimeSeconds.trim()) settings.max_runtime_seconds = Number(maxRuntimeSeconds);
-    if (maxTotalOutputTokens.trim()) settings.max_total_output_tokens = Number(maxTotalOutputTokens);
-    if (maxTokensDebater.trim()) settings.max_tokens_debater = Number(maxTokensDebater);
-    if (maxTokensJudge.trim()) settings.max_tokens_judge = Number(maxTokensJudge);
+    const settings: Record<string, unknown> = {
+      ...buildAdvancedSettings(),
+      debater_a_side: stance,
+      output_language: language,
+    };
 
     try {
       const created = await fetchJson<Debate>(`${apiBaseUrl}/debates`, {
@@ -53,99 +79,143 @@ export default function HomePage() {
       });
       router.push(`/debates/${created.id}`);
     } catch (e) {
-      toast.error((e as Error).message || "Create failed");
+      toast.error((e as Error).message || t("createFailed"));
     }
   }
 
   return (
-    <div className="grid flex-1 min-h-0 gap-4 lg:grid-cols-[280px_1fr_320px]">
-      <DebatesSidebar />
+    <Card className="flex min-h-0 flex-col">
+      <CardHeader className="h-[120px] flex flex-col justify-between pb-3">
+        <div className="flex h-8 items-center justify-between gap-3">
+          <CardTitle className="truncate text-xl leading-none">
+            {t("appName")}
+          </CardTitle>
+          <div className="h-8 w-0 shrink-0" />
+        </div>
+        <div className="h-0" />
+      </CardHeader>
 
-      <Card className="min-h-0">
-        <CardHeader>
-          <CardTitle>llm-debate</CardTitle>
-          <CardDescription>
-            Two debaters debate turn-by-turn; a judge produces one final verdict at the end.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <div className="text-sm font-medium">Topic</div>
-            <Input placeholder="Enter a debate topic…" value={topic} onChange={(e) => setTopic(e.target.value)} />
-          </div>
+      <CardContent className="scrollbar-none min-h-0 flex-1 overflow-auto space-y-4">
+        <div className="space-y-2">
+          <div className="text-sm font-medium">{t("topic")}</div>
+          <Input
+            placeholder={t("topicPlaceholder")}
+            value={topic}
+            onChange={(e) => setTopic(e.target.value)}
+          />
+        </div>
 
-          <div className="space-y-2">
-            <div className="text-sm font-medium">Stance</div>
-            <Select value={stance} onValueChange={(v) => setStance(v as "pro" | "con")}>
-              <SelectTrigger>
-                <SelectValue placeholder="Debater A stance" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="pro">Debater A: Pro</SelectItem>
-                <SelectItem value="con">Debater A: Con</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+        <div className="space-y-2">
+          <div className="text-sm font-medium">{t("stance")}</div>
+          <Select
+            value={stance}
+            onValueChange={(v) => setStance(v as "pro" | "con")}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder={t("debaterAStancePlaceholder")} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="pro">{t("debaterAPro")}</SelectItem>
+              <SelectItem value="con">{t("debaterACon")}</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
 
-          <Accordion type="single" collapsible>
-            <AccordionItem value="advanced">
-              <AccordionTrigger>Advanced</AccordionTrigger>
-              <AccordionContent>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <div className="text-sm font-medium">Model (Debaters)</div>
-                    <Input placeholder="Override model id…" value={modelDebater} onChange={(e) => setModelDebater(e.target.value)} />
+        <Accordion type="single" collapsible>
+          <AccordionItem value="advanced">
+            <AccordionTrigger>{t("advanced")}</AccordionTrigger>
+            <AccordionContent>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <div className="text-sm font-medium">
+                    {t("modelDebaters")}
                   </div>
-                  <div className="space-y-1.5">
-                    <div className="text-sm font-medium">Model (Judge)</div>
-                    <Input placeholder="Override model id…" value={modelJudge} onChange={(e) => setModelJudge(e.target.value)} />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <div className="text-sm font-medium">max_rounds</div>
-                    <Input inputMode="numeric" placeholder="5" value={maxRounds} onChange={(e) => setMaxRounds(e.target.value)} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <div className="text-sm font-medium">max_runtime_seconds</div>
-                    <Input inputMode="numeric" placeholder="600" value={maxRuntimeSeconds} onChange={(e) => setMaxRuntimeSeconds(e.target.value)} />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <div className="text-sm font-medium">max_total_output_tokens</div>
-                    <Input inputMode="numeric" placeholder="8000" value={maxTotalOutputTokens} onChange={(e) => setMaxTotalOutputTokens(e.target.value)} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <div className="text-sm font-medium">max_tokens_debater</div>
-                    <Input inputMode="numeric" placeholder="600" value={maxTokensDebater} onChange={(e) => setMaxTokensDebater(e.target.value)} />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <div className="text-sm font-medium">max_tokens_judge</div>
-                    <Input inputMode="numeric" placeholder="400" value={maxTokensJudge} onChange={(e) => setMaxTokensJudge(e.target.value)} />
-                  </div>
+                  <Input
+                    placeholder={t("modelOverridePlaceholder")}
+                    value={modelDebater}
+                    onChange={(e) => setModelDebater(e.target.value)}
+                  />
                 </div>
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
+                <div className="space-y-1.5">
+                  <div className="text-sm font-medium">{t("modelJudge")}</div>
+                  <Input
+                    placeholder={t("modelOverridePlaceholder")}
+                    value={modelJudge}
+                    onChange={(e) => setModelJudge(e.target.value)}
+                  />
+                </div>
 
-          <div className="flex items-center justify-end gap-2">
-            <Button onClick={() => createDebate().catch(() => {})} disabled={!topic.trim()}>
-              New debate
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+                <div className="space-y-1.5">
+                  <div className="text-sm font-medium">
+                    {t("maxRoundsLabel")}
+                  </div>
+                  <Input
+                    inputMode="numeric"
+                    placeholder="5"
+                    value={maxRounds}
+                    onChange={(e) => setMaxRounds(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <div className="text-sm font-medium">
+                    {t("maxRuntimeSecondsLabel")}
+                  </div>
+                  <Input
+                    inputMode="numeric"
+                    placeholder="600"
+                    value={maxRuntimeSeconds}
+                    onChange={(e) => setMaxRuntimeSeconds(e.target.value)}
+                  />
+                </div>
 
-      <Card className="min-h-0">
-        <CardHeader>
-          <CardTitle className="text-base">Notes</CardTitle>
-          <CardDescription>Docker-first. Live updates via SSE. Advanced settings are optional.</CardDescription>
-        </CardHeader>
-        <CardContent className="text-sm text-muted-foreground space-y-2">
-          <div>Default limits: max_rounds=5, max_runtime_seconds=600, max_total_output_tokens=8000.</div>
-          <div>Debater A stance is chosen here; Debater B takes the opposite stance automatically.</div>
-        </CardContent>
-      </Card>
-    </div>
+                <div className="space-y-1.5">
+                  <div className="text-sm font-medium">
+                    {t("maxTotalOutputTokensLabel")}
+                  </div>
+                  <Input
+                    inputMode="numeric"
+                    placeholder="8000"
+                    value={maxTotalOutputTokens}
+                    onChange={(e) => setMaxTotalOutputTokens(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <div className="text-sm font-medium">
+                    {t("maxTokensDebaterLabel")}
+                  </div>
+                  <Input
+                    inputMode="numeric"
+                    placeholder="600"
+                    value={maxTokensDebater}
+                    onChange={(e) => setMaxTokensDebater(e.target.value)}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="text-sm font-medium">
+                    {t("maxTokensJudgeLabel")}
+                  </div>
+                  <Input
+                    inputMode="numeric"
+                    placeholder="400"
+                    value={maxTokensJudge}
+                    onChange={(e) => setMaxTokensJudge(e.target.value)}
+                  />
+                </div>
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
+      </CardContent>
+
+      <CardFooter className="flex items-center justify-end pt-3">
+        <Button
+          onClick={() => createDebate().catch(() => {})}
+          disabled={!topic.trim()}
+        >
+          {t("newDebate")}
+        </Button>
+      </CardFooter>
+    </Card>
   );
 }
