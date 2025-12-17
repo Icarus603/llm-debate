@@ -92,7 +92,7 @@ services:
       - api
     ports:
       - "3000:3000"
-    command: ["pnpm", "-C", "apps/web", "dev", "--hostname", "0.0.0.0", "--port", "3000"]
+    command: ["pnpm", "-C", "apps/web", "start", "--hostname", "0.0.0.0", "--port", "3000"]
 
 volumes:
   postgres_data:

@@ -31,3 +31,9 @@ RUN pnpm install --filter @llm-debate/web...
 COPY apps/web apps/web
 
 ENV NEXT_TELEMETRY_DISABLED=1
+ENV NODE_ENV=production
+
+RUN pnpm -C apps/web build
+
+EXPOSE 3000
+CMD ["pnpm", "-C", "apps/web", "start", "--hostname", "0.0.0.0", "--port", "3000"]

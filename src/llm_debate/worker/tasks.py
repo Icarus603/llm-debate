@@ -73,6 +73,9 @@ def advance_debate(self: Any, debate_id: str) -> None:
 
             now = utcnow()
 
+            if debate.status == "canceled":
+                return
+
             if debate.status == "stopping":
                 _set_stopped(debate=debate, now=now)
                 db.add(debate)
@@ -194,6 +197,9 @@ def advance_debate(self: Any, debate_id: str) -> None:
             if debate is None:
                 return
 
+            if debate.status == "canceled":
+                return
+
             if debate.status == "stopping":
                 _set_stopped(debate=debate, now=now)
                 db.add(debate)
@@ -269,6 +275,8 @@ def advance_debate(self: Any, debate_id: str) -> None:
         with session_scope(_SESSIONMAKER) as db:
             debate = _lock_debate(db, debate_uuid)
             if debate is not None:
+                if debate.status == "canceled":
+                    return
                 debate.last_error = repr(exc)
                 debate.updated_at = now
                 retries = int(getattr(self.request, "retries", 0))

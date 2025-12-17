@@ -1,77 +1,75 @@
+@import "tailwindcss";
+@plugin "tailwindcss-animate";
+
 :root {
   color-scheme: light;
-  --bg: #0b0c10;
-  --card: #12131a;
-  --text: #e7e7ee;
-  --muted: #a8a8b8;
-  --border: #2a2c3a;
-  --accent: #5b8cff;
+
+  --background: #faf9f5;
+  --foreground: #111827;
+
+  --card: #ffffff;
+  --card-foreground: #111827;
+
+  --popover: #ffffff;
+  --popover-foreground: #111827;
+
+  --primary: #237cc9;
+  --primary-foreground: #ffffff;
+
+  --secondary: #ffffff;
+  --secondary-foreground: #111827;
+
+  --muted: #faf9f5;
+  --muted-foreground: #6b7280;
+
+  --accent: #237cc9;
+  --accent-foreground: #ffffff;
+
+  --destructive: #dc2626;
+  --destructive-foreground: #ffffff;
+
+  --border: #e7e5e0;
+  --input: #e7e5e0;
+  --ring: #237cc9;
+
+  --radius: 12px;
 }
 
-* {
-  box-sizing: border-box;
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+  }
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
 }
 
-body {
-  margin: 0;
-  background: var(--bg);
-  color: var(--text);
-  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial,
-    "Apple Color Emoji", "Segoe UI Emoji";
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
 }
-
-main {
-  max-width: 980px;
-  margin: 0 auto;
-  padding: 24px;
-}
-
-a {
-  color: inherit;
-}
-
-.row {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 16px;
-}
-
-.input,
-.button {
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  padding: 10px 12px;
-  background: transparent;
-  color: var(--text);
-}
-
-.input {
-  min-width: 280px;
-  flex: 1;
-}
-
-.button {
-  cursor: pointer;
-}
-
-.button.primary {
-  border-color: color-mix(in srgb, var(--accent), var(--border) 30%);
-  background: color-mix(in srgb, var(--accent), transparent 85%);
-}
-
-.muted {
-  color: var(--muted);
-}
-
-.turn {
-  white-space: pre-wrap;
-  line-height: 1.4;
-}
-

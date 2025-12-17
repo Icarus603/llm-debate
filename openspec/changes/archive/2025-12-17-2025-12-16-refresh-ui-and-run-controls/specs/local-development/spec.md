@@ -1,8 +1,6 @@
-# local-development Specification
+# local-development Spec Delta
 
-## Purpose
-TBD - created by archiving change add-llm-debate-scaffold. Update Purpose after archive.
-## Requirements
+## MODIFIED Requirements
 ### Requirement: Local infrastructure
 The system SHALL provide a local development setup that runs Postgres and Redis, and can optionally run the full stack via Docker Compose.
 
@@ -18,11 +16,4 @@ The system SHALL support running the web UI, API service, and worker directly on
 - **WHEN** a developer starts local infrastructure via Docker Compose
 - **THEN** the developer can run `apps/web`, `apps/api`, and `apps/worker` as local processes
 - **AND THEN** those local processes connect to Postgres and Redis via environment variables
-
-### Requirement: Environment configuration
-The system SHALL support configuring database, Redis, and DeepSeek settings via environment variables.
-
-#### Scenario: Developer configures environment
-- **WHEN** a developer sets environment variables for URLs and credentials
-- **THEN** the API and worker can connect without code changes
 

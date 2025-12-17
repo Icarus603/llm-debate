@@ -123,7 +123,7 @@ def start_debate(debate_id: uuid.UUID, db: Session = Depends(get_db)) -> StartRe
     if debate is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Debate not found")
 
-    if debate.status in {"running"}:
+    if debate.status in {"running", "canceled"}:
         return StartResumeResponse(enqueued=False)
 
     debate.status = "running"
@@ -141,7 +141,7 @@ def resume_debate(debate_id: uuid.UUID, db: Session = Depends(get_db)) -> StartR
     if debate is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Debate not found")
 
-    if debate.status in {"running"}:
+    if debate.status in {"running", "canceled"}:
         return StartResumeResponse(enqueued=False)
 
     debate.status = "running"
@@ -160,13 +160,50 @@ def stop_debate(debate_id: uuid.UUID, db: Session = Depends(get_db)) -> Response
     if debate is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Debate not found")
 
-    if debate.status in {"completed", "failed"}:
+    if debate.status in {"completed", "failed", "canceled"}:
         return Response(status_code=status.HTTP_204_NO_CONTENT)
 
     debate.status = "stopping"
     debate.updated_at = utcnow()
     db.add(debate)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/{debate_id}/cancel", status_code=status.HTTP_204_NO_CONTENT)
+def cancel_debate(debate_id: uuid.UUID, db: Session = Depends(get_db)) -> Response:
+    debate = db.get(Debate, debate_id)
+    if debate is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Debate not found")
+
+    if debate.status in {"completed", "failed", "canceled"}:
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+    debate.status = "canceled"
+    debate.stop_reason = "canceled"
+    debate.updated_at = utcnow()
+    db.add(debate)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/{debate_id}/retry", response_model=StartResumeResponse)
+def retry_debate(debate_id: uuid.UUID, db: Session = Depends(get_db)) -> StartResumeResponse:
+    debate = db.get(Debate, debate_id)
+    if debate is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Debate not found")
+
+    if debate.status != "failed":
+        return StartResumeResponse(enqueued=False)
+
+    debate.status = "running"
+    debate.last_error = None
+    debate.stop_reason = None
+    if "started_at" not in debate.settings:
+        debate.settings = {**debate.settings, "started_at": utcnow().isoformat()}
+    debate.updated_at = utcnow()
+    db.add(debate)
+    db.flush()
+    advance_debate.delay(str(debate.id))
+    return StartResumeResponse(enqueued=True)
 
 
 def _sse_format(event: str, data: dict[str, Any], event_id: str | None) -> str:

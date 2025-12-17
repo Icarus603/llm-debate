@@ -20,7 +20,12 @@ docker compose up -d --build
 
 Open `http://localhost:3000`.
 
-Create a debate on `/`, then open the deep-linkable detail page at `/debates/<id>`.
+The Docker web container runs in production mode (`next build` + `next start`) for consistent behavior. For hot-reload UI development, use Option B.
+
+## UI tour (current MVP)
+- Left: debates list (search + status chips).
+- Center: transcript timeline (live-updating).
+- Right: controls (start/stop/resume/cancel/retry) and a pinned final verdict when present.
 
 Stop everything:
 ```bash
@@ -81,5 +86,5 @@ uv run python scripts/smoke_e2e.py
 Per-debate model overrides can be set on `POST /debates` via `settings.model_debater` and `settings.model_judge`.
 
 ## Troubleshooting
-- Port conflicts: only the web (`3000`) and api (`8000`) ports are published by default; if you changed compose overrides, ensure nothing else is using those ports.
+- Port conflicts: only the web (`3000`) and api (`8000`) ports are published by default; if you use `docker-compose.host.yml`, Postgres (`5432`) and Redis (`6379`) are also published.
 - Reset local state (destructive): `docker compose down -v` removes the Postgres volume and clears all debates.
